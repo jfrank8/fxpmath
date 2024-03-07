@@ -37,6 +37,8 @@ import numpy as np
 import math
 import copy
 import re
+import scipy
+from scipy.sparse import csr_array
 
 from . import utils
 from . import _n_word_max, _max_error
@@ -234,6 +236,7 @@ class Fxp():
         self._update_dtype()
 
         # store the value
+        #breakpoint()
         self.set_val(val, raw=raw)
 
     # ---
@@ -670,6 +673,39 @@ class Fxp():
                 else:
                     vdtype = float
 
+        elif isinstance(val, scipy.sparse._csr.csr_matrix):
+            #breakpoint()
+            if isinstance(val, object):
+                vdtype = type(val.data[0])
+            else:
+                vdtype = val.dtype
+
+            try:
+                if isinstance(val, np.float128):
+                    val = np.array(float(val))
+            except:
+                # by now it is just an extra test, not critical
+                pass
+
+            '''
+            #for now we aren't going to handle strings
+            if np.issubdtype(val.dtype, np.str_):
+                # if val is a str(s), convert to number(s)
+                val = val.tolist()
+
+                if not raw:
+                    val, signed, n_word, n_frac = utils.str2num(val, self.signed, self.n_word, self.n_frac, return_sizes=True)
+                else:
+                    val, signed, n_word, _ = utils.str2num(val, self.signed, self.n_word, None, return_sizes=True)
+                    n_frac = self.n_frac
+
+                if n_frac is not None and n_frac == 0:
+                    vdtype = int
+                else:
+                    vdtype = float
+            '''
+
+
         elif isinstance(val, (list, tuple, str)):
             # if val is a str(s), convert to number(s)
             if not raw:
@@ -694,7 +730,10 @@ class Fxp():
             raise ValueError('Not supported input type: {}'.format(type(val)))
 
         # convert to (numpy) ndarray
-        val = np.array(val)
+        if isinstance(val, scipy.sparse._csr.csr_matrix):
+            foo='moo'
+        else:
+            val = np.array(val)
 
         if vdtype is None:
             vdtype = val.dtype
@@ -715,7 +754,9 @@ class Fxp():
                     vdtype = float
             
             # check if it is a numpy array
-            if not isinstance(val, (np.ndarray, np.generic)):
+            if isinstance(val, scipy.sparse._csr.csr_matrix):
+                foo='moo'
+            elif not isinstance(val, (np.ndarray, np.generic)):
                 val = np.array(val)
 
         if return_sizes:
@@ -800,9 +841,11 @@ class Fxp():
         conv_factor = self._get_conv_factor(raw)
 
         # round, saturate and store
+        # TODO: matricies struggle, how are arrays handled???
         if original_vdtype != complex and not np.issubdtype(original_vdtype, np.complexfloating):
             # val_dtype determination
             _n_word_max_ = min(_n_word_max, 64)
+            #breakpoint()
             if np.max(val) >= 2**_n_word_max_ or np.min(val) < -2**_n_word_max_ or self.n_word >= _n_word_max_:
                 val_dtype = object
                 val = val.astype(object)
@@ -811,6 +854,7 @@ class Fxp():
                 val_dtype = np.int64 if self.signed else np.uint64
 
             # rounding and overflowing
+            #breakpoint()
             new_val = self._round(val * conv_factor , method=self.config.rounding)
             new_val = self._overflow_action(new_val, val_min, val_max)
 
@@ -829,6 +873,7 @@ class Fxp():
             self.real = self.get_val()
             self.imag = 0
 
+        #lets not worry about sparse matricies of complex values
         else:
             # extract real and imaginary parts
             new_val_real = np.vectorize(lambda v: v.real)(val)
@@ -881,9 +926,17 @@ class Fxp():
                 self.vdtype = float  # change to float type if Fxp has fractional part
 
         # check inaccuracy
-        if not np.equal(val, new_val/conv_factor).all() :
-            self.status['inaccuracy'] = True
-            self._run_callbacks('on_status_inaccuracy')
+        #breakpoint()
+
+        if isinstance(val, scipy.sparse._csr.csr_matrix):
+            if not np.equal(val.data, new_val.data/conv_factor).all() :
+                self.status['inaccuracy'] = True
+                self._run_callbacks('on_status_inaccuracy')
+
+        else:
+            if not np.equal(val, new_val/conv_factor).all() :
+                self.status['inaccuracy'] = True
+                self._run_callbacks('on_status_inaccuracy')
 
         # run changed value callback
         self._run_callbacks('on_value_change')
@@ -1042,15 +1095,33 @@ class Fxp():
     # behaviors
 
     def _overflow_action(self, new_val, val_min, val_max):
-        if np.any(new_val > val_max):
-            self.status['overflow'] = True
-            self._run_callbacks('on_status_overflow')
-        if np.any(new_val < val_min):
-            self.status['underflow'] = True
-            self._run_callbacks('on_status_underflow')
-        
+        #how to handle the sparse comparisons?
+        #breakpoint()
+        if isinstance(new_val, scipy.sparse._csr.csr_matrix):
+            if np.any((new_val > val_max).data):
+                self.status['overflow'] = True
+                self._run_callbacks('on_status_overflow')
+            if np.any((new_val < val_min).data):
+                self.status['underflow'] = True
+                self._run_callbacks('on_status_underflow')
+
+
+        else:
+            if np.any(new_val > val_max):
+                self.status['overflow'] = True
+                self._run_callbacks('on_status_overflow')
+            if np.any(new_val < val_min):
+                self.status['underflow'] = True
+                self._run_callbacks('on_status_underflow')
+
         if self.config.overflow == 'saturate':
-            if isinstance(new_val, np.ndarray) and new_val.dtype == object:
+            if isinstance(new_val, scipy.sparse._csr.csr_matrix):
+                #breakpoint()
+                newdata = np.clip(new_val.data, val_min, val_max)
+                newindptr = new_val.indptr
+                newindices = new_val.indices
+                val = scipy.sparse.csr_array((newdata,newindices,newindptr),new_val.shape)
+            elif isinstance(new_val, np.ndarray) and new_val.dtype == object:
                 val = np.clip(new_val, val_min, val_max)
             else:
                 val = utils.clip(new_val, val_min, val_max)
