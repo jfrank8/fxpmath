@@ -38,7 +38,7 @@ import math
 import copy
 import re
 import scipy
-from scipy.sparse import csr_array
+from scipy.sparse import csr_array, issparse
 
 from . import utils
 from . import _n_word_max, _max_error
@@ -472,6 +472,7 @@ class Fxp():
     
     def set_best_sizes(self, val=None, n_word=None, n_frac=None, max_error=1.0e-6, n_word_max=64, raw=False):
 
+        breakpoint()
         if val is None:
             if n_word is None and n_frac is None:
                 self.n_word = 16
@@ -673,19 +674,9 @@ class Fxp():
                 else:
                     vdtype = float
 
-        elif isinstance(val, scipy.sparse._csr.csr_matrix):
+        elif issparse(val):
             #breakpoint()
-            if isinstance(val, object):
-                vdtype = type(val.data[0])
-            else:
-                vdtype = val.dtype
-
-            try:
-                if isinstance(val, np.float128):
-                    val = np.array(float(val))
-            except:
-                # by now it is just an extra test, not critical
-                pass
+            vdtype = val.dtype
 
             '''
             #for now we aren't going to handle strings
@@ -730,7 +721,7 @@ class Fxp():
             raise ValueError('Not supported input type: {}'.format(type(val)))
 
         # convert to (numpy) ndarray
-        if isinstance(val, scipy.sparse._csr.csr_matrix):
+        if issparse(val):
             foo='moo'
         else:
             val = np.array(val)
@@ -754,7 +745,7 @@ class Fxp():
                     vdtype = float
             
             # check if it is a numpy array
-            if isinstance(val, scipy.sparse._csr.csr_matrix):
+            if issparse(val):
                 foo='moo'
             elif not isinstance(val, (np.ndarray, np.generic)):
                 val = np.array(val)
@@ -928,7 +919,7 @@ class Fxp():
         # check inaccuracy
         #breakpoint()
 
-        if isinstance(val, scipy.sparse._csr.csr_matrix):
+        if issparse(val):
             if not np.equal(val.data, new_val.data/conv_factor).all() :
                 self.status['inaccuracy'] = True
                 self._run_callbacks('on_status_inaccuracy')
@@ -1097,7 +1088,7 @@ class Fxp():
     def _overflow_action(self, new_val, val_min, val_max):
         #how to handle the sparse comparisons?
         #breakpoint()
-        if isinstance(new_val, scipy.sparse._csr.csr_matrix):
+        if issparse(new_val):
             if np.any((new_val > val_max).data):
                 self.status['overflow'] = True
                 self._run_callbacks('on_status_overflow')
@@ -1115,12 +1106,22 @@ class Fxp():
                 self._run_callbacks('on_status_underflow')
 
         if self.config.overflow == 'saturate':
-            if isinstance(new_val, scipy.sparse._csr.csr_matrix):
-                #breakpoint()
+            if issparse(new_val):
+                breakpoint()
                 newdata = np.clip(new_val.data, val_min, val_max)
                 newindptr = new_val.indptr
                 newindices = new_val.indices
-                val = scipy.sparse.csr_array((newdata,newindices,newindptr),new_val.shape)
+                if isinstance(new_val,scipy.sparse.csr_array):
+                    val = scipy.sparse.csr_array((newdata,newindices,newindptr),new_val.shape)
+                elif isinstance(new_val,scipy.sparse.csc_array):
+                    val = scipy.sparse.csc_array((newdata,newindices,newindptr),new_val.shape)
+                elif isinstance(new_val,scipy.sparse.csr_matrix):
+                    val = scipy.sparse.csr_matrix((newdata,newindices,newindptr),new_val.shape)
+                elif isinstance(new_val,scipy.sparse.csc_matrix):
+                    val = scipy.sparse.csc_matrix((newdata,newindices,newindptr),new_val.shape)
+                else:
+                    breakpoint()
+                    raise ValueError('The newvalue of the clipped array was sparse but not csr_array or csc_array')
             elif isinstance(new_val, np.ndarray) and new_val.dtype == object:
                 val = np.clip(new_val, val_min, val_max)
             else:
@@ -1569,6 +1570,12 @@ class Fxp():
             s += '\tRounding\t=\t{}\n'.format(self.config.rounding)
             s += '\tShifting\t=\t{}\n'.format(self.config.shifting)
         print(s)
+
+    def matmul(self,x):
+        if isinstance(x, Fxp):
+            x = x.get_val()
+        return self.get_val() @ x
+
 
 
     # base representations

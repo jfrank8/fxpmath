@@ -37,7 +37,7 @@ import numpy as np
 from .objects import Fxp, implements
 from . import utils
 from . import _n_word_max
-import scipy
+from scipy.sparse import issparse
 
 try:
     from decimal import Decimal
@@ -724,7 +724,7 @@ def dot(x, y, out=None, out_like=None, sizing='optimal', method='raw', **kwargs)
         precision_cast = (lambda m: np.array(m, dtype=object)) if n_frac >= _n_word_max else (lambda m: m)
         #you might have to handle this different for csr matricies
         #check type
-        if isinstance(x.val, scipy.sparse._csr.csr_array):
+        if issparse(x.val):
             return x.val.dot(y.val, **kwargs) * precision_cast(2**(n_frac - x.n_frac - y.n_frac))
         else:
             return np.dot(x.val, y.val, **kwargs) * precision_cast(2**(n_frac - x.n_frac - y.n_frac))
