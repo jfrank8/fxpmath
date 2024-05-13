@@ -289,6 +289,24 @@ def fxp_sum(x, sizes='best_sizes', axis=None, dtype=None, out=None, vdtype=None)
 def from_bin(x, **kwargs):
     return Fxp(utils.add_binary_prefix(x), **kwargs)
 
+
+
+def rightshiftArr(x, n, where):
+    #W don't handle the expand option in the CRI project
+    breakpoint()
+    y = x.deepcopy()
+    np.right_shift(y.val, np.array(n, dtype=y.val.dtype), out=y.val, where=where )
+    return y
+
+
+def leftshiftArr(x, n, where):
+    n_word = x.n_word
+    y = Fxp(None, signed=x.signed, n_word=n_word, n_frac=x.n_frac)
+    np.left_shift(x.val, np.array(n, dtype = x.val.dtype), out=x.val, where=where)
+    y.set_val(x.val , raw=True, vdtype=x.vdtype)   # set raw val shifted
+    return y
+
+
 @implements(np.max)
 def fxp_max(x, axis=None, out=None, out_like=None, sizing='optimal', method='raw', **kwargs):
     """
