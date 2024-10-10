@@ -472,7 +472,7 @@ class Fxp():
     
     def set_best_sizes(self, val=None, n_word=None, n_frac=None, max_error=1.0e-6, n_word_max=64, raw=False):
 
-        breakpoint()
+        #breakpoint()
         if val is None:
             if n_word is None and n_frac is None:
                 self.n_word = 16
@@ -1107,7 +1107,7 @@ class Fxp():
 
         if self.config.overflow == 'saturate':
             if issparse(new_val):
-                breakpoint()
+                #breakpoint()
                 newdata = np.clip(new_val.data, val_min, val_max)
                 newindptr = new_val.indptr
                 newindices = new_val.indices
@@ -1120,7 +1120,7 @@ class Fxp():
                 elif isinstance(new_val,scipy.sparse.csc_matrix):
                     val = scipy.sparse.csc_matrix((newdata,newindices,newindptr),new_val.shape)
                 else:
-                    breakpoint()
+                    #breakpoint()
                     raise ValueError('The newvalue of the clipped array was sparse but not csr_array or csc_array')
             elif isinstance(new_val, np.ndarray) and new_val.dtype == object:
                 val = np.clip(new_val, val_min, val_max)

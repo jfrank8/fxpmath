@@ -293,7 +293,7 @@ def from_bin(x, **kwargs):
 
 def rightshiftArr(x, n, where):
     #W don't handle the expand option in the CRI project
-    breakpoint()
+    #breakpoint()
     y = x.deepcopy()
     np.right_shift(y.val, np.array(n, dtype=y.val.dtype), out=y.val, where=where )
     return y
